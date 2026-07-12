@@ -23,6 +23,10 @@ import {
 import { addDays, getPreviousDayLabel, getTodayStr } from "@/lib/dates";
 import { formatMetricValue } from "@/lib/metricLabels";
 
+function entrySnapshot(entry: Entry): string {
+  return JSON.stringify(entry);
+}
+
 interface StreakData {
   overall: number;
   metrics: Record<MetricKey, number>;
@@ -81,10 +85,16 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
       METRIC_KEYS.map((k) => [k, 0])
     ) as Record<MetricKey, number>,
   });
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("synced");
+  const [savedSnapshot, setSavedSnapshot] = useState("");
   const [loading, setLoading] = useState(true);
   const saveTimeout = useRef<NodeJS.Timeout>();
   const retryTimeout = useRef<NodeJS.Timeout>();
+  const savedFlashTimeout = useRef<NodeJS.Timeout>();
+  const formDataRef = useRef(formData);
+
+  formDataRef.current = formData;
+  const isDirty = entrySnapshot(formData) !== savedSnapshot;
 
   const prev = (key: MetricKey) =>
     formatMetricValue(key, previousEntry);
@@ -101,8 +111,11 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
       ]);
       const currentData = await currentRes.json();
       const prevData = await prevRes.json();
-      setFormData(currentData.entry ?? emptyEntry(date));
+      const entry = currentData.entry ?? emptyEntry(date);
+      setFormData(entry);
+      setSavedSnapshot(entrySnapshot(entry));
       setPreviousEntry(prevData.entry ?? null);
+      setSaveStatus("synced");
     } finally {
       setLoading(false);
     }
@@ -123,8 +136,17 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
     fetchStreaks();
   }, [fetchStreaks]);
 
+  useEffect(() => {
+    return () => {
+      if (saveTimeout.current) clearTimeout(saveTimeout.current);
+      if (retryTimeout.current) clearTimeout(retryTimeout.current);
+      if (savedFlashTimeout.current) clearTimeout(savedFlashTimeout.current);
+    };
+  }, []);
+
   const saveToDB = useCallback(
-    async (data: Entry, retry = false) => {
+    async (data: Entry, retry = false): Promise<boolean> => {
+      if (savedFlashTimeout.current) clearTimeout(savedFlashTimeout.current);
       setSaveStatus("saving");
       try {
         const res = await fetch("/api/entries", {
@@ -133,39 +155,74 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
           body: JSON.stringify(data),
         });
         if (!res.ok) throw new Error("Save failed");
+
+        const snapshot = entrySnapshot(data);
+        setSavedSnapshot(snapshot);
         setSaveStatus("saved");
         fetchStreaks();
-        setTimeout(() => setSaveStatus("idle"), 2000);
+
+        savedFlashTimeout.current = setTimeout(() => {
+          setSaveStatus((current) =>
+            entrySnapshot(formDataRef.current) === snapshot
+              ? "synced"
+              : current
+          );
+        }, 2000);
+
+        return true;
       } catch {
         if (!retry) {
           setSaveStatus("error");
           retryTimeout.current = setTimeout(() => {
-            saveToDB(data, true);
+            saveToDB(formDataRef.current, true);
           }, 3000);
         }
+        return false;
       }
     },
     [fetchStreaks]
   );
 
-  const handleChange = useCallback(
-    <K extends keyof Entry>(field: K, value: Entry[K]) => {
-      setFormData((prev) => {
-        const updated = { ...prev, [field]: value };
-        if (saveTimeout.current) clearTimeout(saveTimeout.current);
-        saveTimeout.current = setTimeout(() => {
-          saveToDB(updated);
-        }, 1000);
-        return updated;
-      });
+  const scheduleSave = useCallback(
+    (data: Entry) => {
+      if (saveTimeout.current) clearTimeout(saveTimeout.current);
+      setSaveStatus("pending");
+      saveTimeout.current = setTimeout(() => {
+        saveToDB(data);
+      }, 1000);
     },
     [saveToDB]
   );
 
-  const handleDateChange = (date: string) => {
+  const handleSaveAll = useCallback(() => {
+    if (saveTimeout.current) clearTimeout(saveTimeout.current);
+    if (retryTimeout.current) clearTimeout(retryTimeout.current);
+    saveToDB(formDataRef.current);
+  }, [saveToDB]);
+
+  const handleChange = useCallback(
+    <K extends keyof Entry>(field: K, value: Entry[K]) => {
+      setFormData((prev) => {
+        const updated = { ...prev, [field]: value, date: prev.date };
+        formDataRef.current = updated;
+        scheduleSave(updated);
+        return updated;
+      });
+    },
+    [scheduleSave]
+  );
+
+  const handleDateChange = async (date: string) => {
+    if (saveTimeout.current) clearTimeout(saveTimeout.current);
+    const current = formDataRef.current;
+    if (entrySnapshot(current) !== savedSnapshot) {
+      await saveToDB(current);
+    }
     setCurrentDate(date);
     setFormData(emptyEntry(date));
     setPreviousEntry(null);
+    setSavedSnapshot("");
+    setSaveStatus("synced");
   };
 
   const handleExport = () => {
@@ -188,7 +245,7 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
   }
 
   return (
-    <div className="min-h-screen pb-16">
+    <div className="min-h-screen pb-20">
       <Header
         currentDate={currentDate}
         onDateChange={handleDateChange}
@@ -421,8 +478,10 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
 
       <SaveBar
         status={saveStatus}
+        isDirty={isDirty}
         trackedCount={trackedCount}
         totalCount={12}
+        onSaveAll={handleSaveAll}
       />
     </div>
   );
