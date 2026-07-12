@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0a0a0a;
+  --foreground: #f5f5f5;
+  --surface: #141414;
+  --border: #1e1e1e;
+  --primary: #f5f5f5;
+  --secondary: #888888;
+  --accent: #ff6b35;
+  --success: #4ade80;
+  --destructive: #ef4444;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.streak-flame {
+  filter: drop-shadow(0 0 4px rgba(255, 107, 53, 0.5));
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
