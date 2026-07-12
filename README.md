@@ -2,7 +2,7 @@
 
 A daily health and lifestyle tracker with a minimal, Typeform-inspired interface. Log 12 metrics per day, track streaks, and export your full history as CSV for AI analysis.
 
-**Live app:** _(URL will be added after Railway deploy)_
+**Live app:** https://streaks-app-production.up.railway.app
 
 ## Login Credentials
 
