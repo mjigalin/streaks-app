@@ -9,8 +9,10 @@ import TripleOption from "./ui/TripleOption";
 import NumberInput from "./ui/NumberInput";
 import NotesInput from "./ui/NotesInput";
 import StreakBadge from "./ui/StreakBadge";
+import PreviousValue from "./ui/PreviousValue";
 import SaveBar, { SaveStatus } from "./SaveBar";
 import Header from "./Header";
+import WelcomeBanner from "./WelcomeBanner";
 import {
   Entry,
   MetricKey,
@@ -18,7 +20,8 @@ import {
   countTrackedMetrics,
   emptyEntry,
 } from "@/lib/types";
-import { getTodayStr } from "./DateNav";
+import { addDays, getPreviousDayLabel, getTodayStr } from "@/lib/dates";
+import { formatMetricValue } from "@/lib/metricLabels";
 
 interface StreakData {
   overall: number;
@@ -33,13 +36,18 @@ function MetricSection({
   index,
   label,
   streak,
+  currentDate,
+  previousValue,
   children,
 }: {
   index: number;
   label: string;
   streak: number;
+  currentDate: string;
+  previousValue?: string | null;
   children: React.ReactNode;
 }) {
+  const previousDayLabel = getPreviousDayLabel(currentDate);
   return (
     <motion.section
       initial={{ opacity: 0, y: 12 }}
@@ -47,8 +55,13 @@ function MetricSection({
       transition={{ delay: index * 0.05, duration: 0.3 }}
       className="space-y-3 rounded-xl border border-border bg-surface p-4"
     >
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-primary">{label}</h3>
+      <div className="flex items-start justify-between gap-2">
+        <div className="space-y-1">
+          <h3 className="text-sm font-medium text-primary">{label}</h3>
+          {previousValue !== undefined && (
+            <PreviousValue label={previousValue} dayLabel={previousDayLabel} />
+          )}
+        </div>
         <StreakBadge count={streak} />
       </div>
       {children}
@@ -61,6 +74,7 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
     initialDate ?? getTodayStr()
   );
   const [formData, setFormData] = useState<Entry>(emptyEntry(currentDate));
+  const [previousEntry, setPreviousEntry] = useState<Entry | null>(null);
   const [streaks, setStreaks] = useState<StreakData>({
     overall: 0,
     metrics: Object.fromEntries(
@@ -70,17 +84,25 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [loading, setLoading] = useState(true);
   const saveTimeout = useRef<NodeJS.Timeout>();
-  const formDataRef = useRef(formData);
   const retryTimeout = useRef<NodeJS.Timeout>();
 
-  formDataRef.current = formData;
+  const prev = (key: MetricKey) =>
+    formatMetricValue(key, previousEntry);
+
+  const previousDayLabel = getPreviousDayLabel(currentDate);
 
   const fetchEntry = useCallback(async (date: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/entries?date=${date}`);
-      const data = await res.json();
-      setFormData(data.entry ?? emptyEntry(date));
+      const prevDate = addDays(date, -1);
+      const [currentRes, prevRes] = await Promise.all([
+        fetch(`/api/entries?date=${date}`),
+        fetch(`/api/entries?date=${prevDate}`),
+      ]);
+      const currentData = await currentRes.json();
+      const prevData = await prevRes.json();
+      setFormData(currentData.entry ?? emptyEntry(date));
+      setPreviousEntry(prevData.entry ?? null);
     } finally {
       setLoading(false);
     }
@@ -143,6 +165,7 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
   const handleDateChange = (date: string) => {
     setCurrentDate(date);
     setFormData(emptyEntry(date));
+    setPreviousEntry(null);
   };
 
   const handleExport = () => {
@@ -174,6 +197,13 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
       />
 
       <main className="mx-auto max-w-[480px] space-y-6 px-4 py-6">
+        <WelcomeBanner
+          currentDate={currentDate}
+          overallStreak={streaks.overall}
+          trackedToday={trackedCount}
+          totalMetrics={12}
+        />
+
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -199,6 +229,8 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
           index={0}
           label="Skin Score"
           streak={streaks.metrics.skin_score}
+          currentDate={currentDate}
+          previousValue={prev("skin_score")}
         >
           <SliderInput
             value={formData.skin_score}
@@ -212,6 +244,8 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
           index={1}
           label="Stress Level"
           streak={streaks.metrics.stress}
+          currentDate={currentDate}
+          previousValue={prev("stress")}
         >
           <SliderInput
             value={formData.stress}
@@ -225,6 +259,8 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
           index={2}
           label="Workload"
           streak={streaks.metrics.workload}
+          currentDate={currentDate}
+          previousValue={prev("workload")}
         >
           <SliderInput
             value={formData.workload}
@@ -238,6 +274,8 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
           index={3}
           label="Today's Busyness"
           streak={streaks.metrics.busyness}
+          currentDate={currentDate}
+          previousValue={prev("busyness")}
         >
           <TripleOption
             options={[
@@ -260,6 +298,8 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
           index={4}
           label="Sleep Last Night"
           streak={streaks.metrics.sleep}
+          currentDate={currentDate}
+          previousValue={prev("sleep")}
         >
           <BubbleSelect
             options={[
@@ -276,6 +316,8 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
           index={5}
           label="Food Today"
           streak={streaks.metrics.food}
+          currentDate={currentDate}
+          previousValue={prev("food")}
         >
           <TripleOption
             options={[
@@ -294,51 +336,54 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
           transition={{ delay: 0.3, duration: 0.3 }}
           className="grid grid-cols-2 gap-3 sm:grid-cols-4"
         >
-          <ToggleChip
-            label="Alcohol"
-            emoji="🍺"
-            active={formData.alcohol === 1}
-            onToggle={() =>
-              handleChange(
-                "alcohol",
-                formData.alcohol === 1 ? 0 : formData.alcohol === 0 ? null : 1
-              )
-            }
-            activeColor="red"
-          />
-          <ToggleChip
-            label="Water"
-            emoji="💧"
-            active={formData.water === 1}
-            onToggle={() =>
-              handleChange(
-                "water",
-                formData.water === 1 ? 0 : formData.water === 0 ? null : 1
-              )
-            }
-          />
-          <ToggleChip
-            label="Workout"
-            emoji="🏋️"
-            active={formData.workout === 1}
-            onToggle={() =>
-              handleChange(
-                "workout",
-                formData.workout === 1 ? 0 : formData.workout === 0 ? null : 1
-              )
-            }
-          />
-          <ToggleChip
-            label="Reading"
-            emoji="📖"
-            active={formData.reading === 1}
-            onToggle={() =>
-              handleChange(
-                "reading",
-                formData.reading === 1 ? 0 : formData.reading === 0 ? null : 1
-              )
-            }
-          />
+          <div className="space-y-1">
+            <ToggleChip
+              emoji="🍺"
+              categoryLabel="Alcohol"
+              value={formData.alcohol}
+              goodValue={0}
+              goodLabel="No alcohol"
+              badLabel="Had alcohol"
+              onChange={(v) => handleChange("alcohol", v)}
+            />
+            <PreviousValue label={prev("alcohol")} dayLabel={previousDayLabel} />
+          </div>
+          <div className="space-y-1">
+            <ToggleChip
+              emoji="💧"
+              categoryLabel="Water"
+              value={formData.water}
+              goodValue={1}
+              goodLabel="Hydrated"
+              badLabel="Dehydrated"
+              onChange={(v) => handleChange("water", v)}
+            />
+            <PreviousValue label={prev("water")} dayLabel={previousDayLabel} />
+          </div>
+          <div className="space-y-1">
+            <ToggleChip
+              emoji="🏋️"
+              categoryLabel="Workout"
+              value={formData.workout}
+              goodValue={1}
+              goodLabel="Worked out"
+              badLabel="No workout"
+              onChange={(v) => handleChange("workout", v)}
+            />
+            <PreviousValue label={prev("workout")} dayLabel={previousDayLabel} />
+          </div>
+          <div className="space-y-1">
+            <ToggleChip
+              emoji="📖"
+              categoryLabel="Reading"
+              value={formData.reading}
+              goodValue={1}
+              goodLabel="Read today"
+              badLabel="Didn't read"
+              onChange={(v) => handleChange("reading", v)}
+            />
+            <PreviousValue label={prev("reading")} dayLabel={previousDayLabel} />
+          </div>
         </motion.section>
 
         <div className="space-y-1 pt-2">
@@ -351,6 +396,8 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
           index={6}
           label="Weight"
           streak={streaks.metrics.weight_kg}
+          currentDate={currentDate}
+          previousValue={prev("weight_kg")}
         >
           <NumberInput
             value={formData.weight_kg}
@@ -358,7 +405,13 @@ export default function DailyForm({ initialDate }: DailyFormProps) {
           />
         </MetricSection>
 
-        <MetricSection index={7} label="Notes" streak={streaks.metrics.notes}>
+        <MetricSection
+          index={7}
+          label="Notes"
+          streak={streaks.metrics.notes}
+          currentDate={currentDate}
+          previousValue={prev("notes")}
+        >
           <NotesInput
             value={formData.notes}
             onChange={(v) => handleChange("notes", v)}

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
-import { generateCsv } from "@/lib/csv";
+import { generateCsv, getExportFilename } from "@/lib/csv";
 
 export async function GET(request: NextRequest) {
   const session = await requireAuth(request);
@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   }
 
   const csv = generateCsv();
-  const filename = `streaks-export-${new Date().toISOString().slice(0, 10)}.csv`;
+  const filename = getExportFilename();
 
   return new NextResponse(csv, {
     headers: {

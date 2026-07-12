@@ -1,37 +1,10 @@
 "use client";
 
-function formatDateLabel(dateStr: string): string {
-  const date = new Date(dateStr + "T12:00:00");
-  const today = new Date();
-  today.setHours(12, 0, 0, 0);
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  const compare = new Date(dateStr + "T12:00:00");
-  compare.setHours(12, 0, 0, 0);
-
-  if (compare.getTime() === today.getTime()) {
-    return `Today, ${date.toLocaleDateString("en-AU", { day: "numeric", month: "short" })}`;
-  }
-  if (compare.getTime() === yesterday.getTime()) {
-    return "Yesterday";
-  }
-  return date.toLocaleDateString("en-AU", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
-}
-
-function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr + "T12:00:00");
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-function getTodayStr(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+import {
+  addDays,
+  formatDateLabel,
+  getTodayStr,
+} from "@/lib/dates";
 
 interface DateNavProps {
   currentDate: string;
@@ -69,5 +42,3 @@ export default function DateNav({ currentDate, onDateChange }: DateNavProps) {
     </div>
   );
 }
-
-export { getTodayStr, addDays };

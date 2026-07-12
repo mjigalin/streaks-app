@@ -5,6 +5,7 @@ import {
   MetricKey,
   isMetricTracked,
 } from "./types";
+import { addDays, getTodayStr } from "./dates";
 
 export interface StreakResult {
   overall: number;
@@ -51,16 +52,11 @@ function getStartDate(entries: Entry[], today: string): string | null {
   if (entries.length === 0) return null;
   const entryMap = buildDateSet(entries);
   if (entryMap.has(today)) return today;
-
-  const todayDate = new Date(today + "T12:00:00");
-  todayDate.setDate(todayDate.getDate() - 1);
-  return todayDate.toISOString().slice(0, 10);
+  return addDays(today, -1);
 }
 
 function previousDate(dateStr: string): string {
-  const d = new Date(dateStr + "T12:00:00");
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+  return addDays(dateStr, -1);
 }
 
 function calculateMetricStreak(
@@ -105,8 +101,7 @@ function calculateOverallStreak(
 }
 
 export function calculateStreaks(today?: string): StreakResult {
-  const todayStr =
-    today ?? new Date().toISOString().slice(0, 10);
+  const todayStr = today ?? getTodayStr();
   const entries = getOrderedEntries();
   const entryMap = buildDateSet(entries);
   const startDate = getStartDate(entries, todayStr);
