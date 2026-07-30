@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import bcrypt from "bcryptjs";
 import path from "path";
 import fs from "fs";
 
@@ -79,7 +80,12 @@ function initSchema(database: Database.Database): void {
 
 function seedUser(database: Database.Database): void {
   const email = process.env.USER_EMAIL;
-  const passwordHash = process.env.USER_PASSWORD_HASH;
+  let passwordHash = process.env.USER_PASSWORD_HASH;
+
+  // Plain USER_PASSWORD avoids $ mangling in Railway/env files
+  if (process.env.USER_PASSWORD) {
+    passwordHash = bcrypt.hashSync(process.env.USER_PASSWORD, 10);
+  }
 
   if (!email || !passwordHash) return;
 
