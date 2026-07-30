@@ -1,7 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { getHabitLabel, HabitDefinition } from "@/lib/habits";
+import {
+  getHabitTitle,
+  getHabitSubtitle,
+  HabitDefinition,
+} from "@/lib/habits";
 import { HabitCompletion } from "@/lib/completions";
 
 interface HabitItemProps {
@@ -13,6 +17,8 @@ interface HabitItemProps {
   weightAverage?: number | null;
   onToggle: (habitId: string) => void;
   onWeightChange?: (habitId: string, weight: number | null) => void;
+  onTextChange?: (habitId: string, text: string | null) => void;
+  onEveningRitual?: () => void;
 }
 
 export default function HabitItem({
@@ -24,87 +30,172 @@ export default function HabitItem({
   weightAverage,
   onToggle,
   onWeightChange,
+  onTextChange,
+  onEveningRitual,
 }: HabitItemProps) {
-  const label = getHabitLabel(habit, date);
+  const title = getHabitTitle(habit, date);
+  const subtitle = getHabitSubtitle(habit, date);
   const done = completion.completed;
+
+  const handleClick = () => {
+    if (habit.inputType === "evening_ritual" && !done) {
+      onEveningRitual?.();
+      return;
+    }
+    onToggle(habit.id);
+  };
 
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: faded ? 0.35 : 1, y: 0 }}
-      exit={{ opacity: 0, y: -24, height: 0 }}
-      transition={{ duration: 0.35, ease: "easeOut" }}
-      className={`relative flex gap-4 ${faded ? "py-2" : "py-4"}`}
+      initial={{ opacity: 0, y: 20, scale: 0.98 }}
+      animate={{
+        opacity: faded ? 0.4 : 1,
+        y: 0,
+        scale: 1,
+      }}
+      exit={{ opacity: 0, y: -30, scale: 0.95, transition: { duration: 0.3 } }}
+      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+      className={`relative flex gap-3 ${faded ? "py-2" : "py-3"}`}
     >
       {/* Timeline */}
-      <div className="flex flex-col items-center">
-        <button
+      <div className="flex flex-col items-center pt-1">
+        <motion.button
           type="button"
-          onClick={() => onToggle(habit.id)}
-          className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border text-xs font-medium tabular-nums transition-colors ${
+          onClick={handleClick}
+          whileTap={{ scale: 0.88 }}
+          className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold tabular-nums transition-all ${
             done
-              ? "border-success/50 bg-success/20 text-success"
-              : "border-border bg-surface text-secondary hover:border-accent hover:text-accent"
+              ? "border-success bg-success/20 text-success"
+              : "border-border bg-surface text-secondary hover:border-accent hover:text-accent hover:shadow-[0_0_12px_rgba(255,107,53,0.25)]"
           }`}
-          aria-label={done ? "Mark incomplete" : "Mark complete"}
         >
           {done ? "✓" : habit.number}
-        </button>
+        </motion.button>
         {!isLast && (
-          <div
-            className={`mt-1 w-px flex-1 min-h-[16px] ${
-              done ? "bg-success/30" : "bg-border"
+          <motion.div
+            className={`mt-1 w-0.5 flex-1 min-h-[20px] rounded-full ${
+              done ? "bg-success/40" : "bg-border"
             }`}
+            layout
           />
         )}
       </div>
 
-      {/* Content */}
-      <button
+      {/* Card */}
+      <motion.button
         type="button"
-        onClick={() => onToggle(habit.id)}
-        className={`flex-1 text-left ${faded ? "line-through decoration-secondary/40" : ""}`}
+        onClick={handleClick}
+        whileTap={{ scale: 0.99 }}
+        className={`flex-1 rounded-2xl border px-4 py-3 text-left transition-colors ${
+          done
+            ? "border-success/20 bg-success/5"
+            : "border-border bg-surface hover:border-accent/40 hover:bg-surface/80"
+        } ${faded ? "opacity-80" : ""}`}
       >
-        <p
-          className={`leading-snug ${
-            faded
-              ? "text-sm text-secondary"
-              : done
-                ? "text-secondary line-through"
-                : "text-base text-primary"
-          }`}
-        >
-          {label}
-        </p>
-        {habit.acceptsWeight && !faded && (
-          <div
-            className="mt-2 flex items-center gap-2"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <input
-              type="number"
-              step="0.1"
-              placeholder="kg"
-              value={completion.value ?? ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                onWeightChange?.(
-                  habit.id,
-                  v === "" ? null : parseFloat(v)
-                );
-              }}
-              className="w-20 border-b border-border bg-transparent py-1 text-sm tabular-nums text-primary outline-none focus:border-accent"
-            />
-            <span className="text-xs text-secondary">kg today</span>
-            {weightAverage !== null && weightAverage !== undefined && (
-              <span className="text-xs text-accent">
-                7-day avg: {weightAverage} kg
-              </span>
+        <div className="flex items-start gap-2">
+          <span className="text-xl leading-none">{habit.emoji}</span>
+          <div className="min-w-0 flex-1">
+            <p
+              className={`font-bold leading-tight ${
+                faded || done
+                  ? "text-base text-secondary line-through decoration-secondary/30"
+                  : "text-lg text-primary"
+              }`}
+            >
+              {title}
+            </p>
+            {subtitle && !faded && (
+              <p className="mt-1 text-xs leading-relaxed text-secondary">
+                {subtitle}
+              </p>
+            )}
+
+            {/* Weigh-in input */}
+            {habit.inputType === "weight" && !faded && (
+              <div
+                className="mt-3 flex flex-wrap items-center gap-2"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <span className="text-sm text-secondary">Weigh in:</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  placeholder="—"
+                  value={completion.value ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    onWeightChange?.(
+                      habit.id,
+                      v === "" ? null : parseFloat(v)
+                    );
+                  }}
+                  className="w-16 border-b-2 border-accent/50 bg-transparent py-0.5 text-lg font-bold tabular-nums text-primary outline-none focus:border-accent"
+                />
+                <span className="text-sm font-medium text-secondary">kg</span>
+                {weightAverage != null && (
+                  <span className="ml-1 rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
+                    7-day avg {weightAverage}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Chore text input */}
+            {habit.inputType === "text" && !faded && (
+              <div
+                className="mt-3"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="text"
+                  placeholder="What's the chore today?"
+                  value={completion.text ?? ""}
+                  onChange={(e) =>
+                    onTextChange?.(habit.id, e.target.value || null)
+                  }
+                  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-primary placeholder:text-secondary/50 outline-none focus:border-accent"
+                />
+              </div>
+            )}
+
+            {/* Evening ritual steps */}
+            {habit.inputType === "evening_ritual" && habit.ritualSteps && (
+              <ul className="mt-3 space-y-1.5 border-t border-border/50 pt-3">
+                {habit.ritualSteps.map((step) => (
+                  <li
+                    key={step}
+                    className="flex items-center gap-2 text-xs text-secondary"
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        done ? "bg-success" : "bg-border"
+                      }`}
+                    />
+                    {step}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {habit.inputType === "evening_ritual" && done && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="mt-3 rounded-lg bg-background px-3 py-2 text-xs font-medium text-success"
+              >
+                📵 Phone away — goodnight Matt
+              </motion.p>
+            )}
+
+            {habit.inputType === "evening_ritual" && !done && !faded && (
+              <p className="mt-2 text-xs font-medium text-accent">
+                Tap to set tomorrow&apos;s intentions →
+              </p>
             )}
           </div>
-        )}
-      </button>
+        </div>
+      </motion.button>
     </motion.div>
   );
 }

@@ -75,7 +75,23 @@ function initSchema(database: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_habit_completions_date ON habit_completions(date);
     CREATE INDEX IF NOT EXISTS idx_entries_date ON entries(date);
+
+    CREATE TABLE IF NOT EXISTS daily_intentions (
+      for_date          TEXT NOT NULL PRIMARY KEY,
+      source_date       TEXT NOT NULL,
+      tomorrow_chore    TEXT,
+      tomorrow_workout  TEXT,
+      work_brain_dump   TEXT,
+      personal_todos    TEXT,
+      created_at        TEXT DEFAULT (datetime('now'))
+    );
   `);
+
+  try {
+    database.exec(`ALTER TABLE habit_completions ADD COLUMN text TEXT`);
+  } catch {
+    // column already exists
+  }
 }
 
 function seedUser(database: Database.Database): void {

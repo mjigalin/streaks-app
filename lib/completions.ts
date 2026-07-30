@@ -1,16 +1,18 @@
 import { getDb } from "./db";
-import {
-  getApplicableHabits,
-  getHabitById,
-} from "./habits";
+import { getApplicableHabits, getHabitById } from "./habits";
 import { getWeekStart } from "./challenge";
 import { addDays } from "./dates";
+import {
+  DailyIntentions,
+  SaveIntentionsInput,
+} from "./intentions";
 
 export interface HabitCompletion {
   habit_id: string;
   completed: boolean;
   completed_at: string | null;
   value: number | null;
+  text: string | null;
 }
 
 export interface DayData {
@@ -18,6 +20,7 @@ export interface DayData {
   habits: Record<string, HabitCompletion>;
   completedCount: number;
   totalCount: number;
+  intentions: DailyIntentions | null;
 }
 
 export interface WeeklyStatus {
@@ -33,13 +36,56 @@ function rowToCompletion(row: {
   completed: number;
   completed_at: string | null;
   value: number | null;
+  text?: string | null;
 }): HabitCompletion {
   return {
     habit_id: row.habit_id,
     completed: row.completed === 1,
     completed_at: row.completed_at,
     value: row.value,
+    text: row.text ?? null,
   };
+}
+
+export function getIntentionsForDate(forDate: string): DailyIntentions | null {
+  const db = getDb();
+  const row = db
+    .prepare(
+      `SELECT for_date, source_date, tomorrow_chore, tomorrow_workout, work_brain_dump, personal_todos
+       FROM daily_intentions WHERE for_date = ?`
+    )
+    .get(forDate) as DailyIntentions | undefined;
+  return row ?? null;
+}
+
+export function saveIntentions(input: SaveIntentionsInput): DailyIntentions {
+  const db = getDb();
+  const forDate = addDays(input.source_date, 1);
+
+  db.prepare(
+    `INSERT INTO daily_intentions (for_date, source_date, tomorrow_chore, tomorrow_workout, work_brain_dump, personal_todos)
+     VALUES (@for_date, @source_date, @tomorrow_chore, @tomorrow_workout, @work_brain_dump, @personal_todos)
+     ON CONFLICT(for_date) DO UPDATE SET
+       source_date = excluded.source_date,
+       tomorrow_chore = excluded.tomorrow_chore,
+       tomorrow_workout = excluded.tomorrow_workout,
+       work_brain_dump = excluded.work_brain_dump,
+       personal_todos = excluded.personal_todos`
+  ).run({
+    for_date: forDate,
+    source_date: input.source_date,
+    tomorrow_chore: input.tomorrow_chore ?? null,
+    tomorrow_workout: input.tomorrow_workout ?? null,
+    work_brain_dump: input.work_brain_dump ?? null,
+    personal_todos: input.personal_todos ?? null,
+  });
+
+  // Autofill tomorrow's chore text
+  if (input.tomorrow_chore) {
+    setHabitText(forDate, "chore", input.tomorrow_chore);
+  }
+
+  return getIntentionsForDate(forDate)!;
 }
 
 export function getDayCompletions(date: string): DayData {
@@ -47,7 +93,7 @@ export function getDayCompletions(date: string): DayData {
   const applicable = getApplicableHabits(date);
   const rows = db
     .prepare(
-      `SELECT habit_id, completed, completed_at, value
+      `SELECT habit_id, completed, completed_at, value, text
        FROM habit_completions WHERE date = ?`
     )
     .all(date) as {
@@ -55,6 +101,7 @@ export function getDayCompletions(date: string): DayData {
     completed: number;
     completed_at: string | null;
     value: number | null;
+    text: string | null;
   }[];
 
   const map: Record<string, HabitCompletion> = {};
@@ -69,6 +116,7 @@ export function getDayCompletions(date: string): DayData {
         completed: false,
         completed_at: null,
         value: null,
+        text: null,
       };
     }
   }
@@ -82,6 +130,7 @@ export function getDayCompletions(date: string): DayData {
     habits: map,
     completedCount,
     totalCount: applicable.length,
+    intentions: getIntentionsForDate(date),
   };
 }
 
@@ -96,29 +145,59 @@ export function toggleHabit(
   const db = getDb();
   const existing = db
     .prepare(
-      `SELECT completed, value FROM habit_completions WHERE date = ? AND habit_id = ?`
+      `SELECT completed, value, text FROM habit_completions WHERE date = ? AND habit_id = ?`
     )
     .get(date, habitId) as
-    | { completed: number; value: number | null }
+    | { completed: number; value: number | null; text: string | null }
     | undefined;
 
   const nowCompleted = existing?.completed === 1;
 
   if (nowCompleted) {
     db.prepare(
-      `UPDATE habit_completions SET completed = 0, completed_at = NULL, value = ?
+      `UPDATE habit_completions SET completed = 0, completed_at = NULL
        WHERE date = ? AND habit_id = ?`
-    ).run(value ?? existing?.value ?? null, date, habitId);
+    ).run(date, habitId);
   } else {
     db.prepare(
-      `INSERT INTO habit_completions (date, habit_id, completed, completed_at, value)
-       VALUES (?, ?, 1, datetime('now'), ?)
+      `INSERT INTO habit_completions (date, habit_id, completed, completed_at, value, text)
+       VALUES (?, ?, 1, datetime('now'), ?, ?)
        ON CONFLICT(date, habit_id) DO UPDATE SET
          completed = 1,
          completed_at = datetime('now'),
-         value = COALESCE(excluded.value, habit_completions.value)`
-    ).run(date, habitId, value ?? null);
+         value = COALESCE(habit_completions.value, excluded.value),
+         text = COALESCE(habit_completions.text, excluded.text)`
+    ).run(date, habitId, value ?? existing?.value ?? null, existing?.text ?? null);
   }
+
+  return getDayCompletions(date);
+}
+
+export function completeHabit(
+  date: string,
+  habitId: string
+): DayData {
+  const db = getDb();
+  const existing = db
+    .prepare(
+      `SELECT value, text FROM habit_completions WHERE date = ? AND habit_id = ?`
+    )
+    .get(date, habitId) as
+    | { value: number | null; text: string | null }
+    | undefined;
+
+  db.prepare(
+    `INSERT INTO habit_completions (date, habit_id, completed, completed_at, value, text)
+     VALUES (?, ?, 1, datetime('now'), ?, ?)
+     ON CONFLICT(date, habit_id) DO UPDATE SET
+       completed = 1,
+       completed_at = datetime('now')`
+  ).run(
+    date,
+    habitId,
+    existing?.value ?? null,
+    existing?.text ?? null
+  );
 
   return getDayCompletions(date);
 }
@@ -131,9 +210,11 @@ export function setHabitWeight(
   const db = getDb();
   const existing = db
     .prepare(
-      `SELECT completed FROM habit_completions WHERE date = ? AND habit_id = ?`
+      `SELECT completed, text FROM habit_completions WHERE date = ? AND habit_id = ?`
     )
-    .get(date, habitId);
+    .get(date, habitId) as
+    | { completed: number; text: string | null }
+    | undefined;
 
   if (existing) {
     db.prepare(
@@ -141,9 +222,37 @@ export function setHabitWeight(
     ).run(weight, date, habitId);
   } else {
     db.prepare(
-      `INSERT INTO habit_completions (date, habit_id, completed, value)
-       VALUES (?, ?, 0, ?)`
+      `INSERT INTO habit_completions (date, habit_id, completed, value, text)
+       VALUES (?, ?, 0, ?, NULL)`
     ).run(date, habitId, weight);
+  }
+
+  return getDayCompletions(date);
+}
+
+export function setHabitText(
+  date: string,
+  habitId: string,
+  text: string | null
+): DayData {
+  const db = getDb();
+  const existing = db
+    .prepare(
+      `SELECT completed, value FROM habit_completions WHERE date = ? AND habit_id = ?`
+    )
+    .get(date, habitId) as
+    | { completed: number; value: number | null }
+    | undefined;
+
+  if (existing) {
+    db.prepare(
+      `UPDATE habit_completions SET text = ? WHERE date = ? AND habit_id = ?`
+    ).run(text, date, habitId);
+  } else {
+    db.prepare(
+      `INSERT INTO habit_completions (date, habit_id, completed, value, text)
+       VALUES (?, ?, 0, NULL, ?)`
+    ).run(date, habitId, text);
   }
 
   return getDayCompletions(date);
@@ -218,7 +327,6 @@ export function isPromptDismissed(
   return !!row;
 }
 
-/** 7-day rolling average weight from weigh-in habit */
 export function getWeightAverage(endDate: string): number | null {
   const db = getDb();
   const rows = db

@@ -4,6 +4,9 @@ import {
   getDayCompletions,
   toggleHabit,
   setHabitWeight,
+  setHabitText,
+  completeHabit,
+  saveIntentions,
   getWeightAverage,
   calculateStreak,
 } from "@/lib/completions";
@@ -34,20 +37,38 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { date, habit_id, action, value } = body;
+    const { date, habit_id, action, value, text, intentions } = body;
 
-    if (!date || !habit_id) {
-      return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+    if (!date) {
+      return NextResponse.json({ error: "Date required" }, { status: 400 });
     }
 
-    if (action === "set_weight") {
-      const day = setHabitWeight(date, habit_id, value ?? null);
+    if (action === "save_intentions" && intentions) {
+      saveIntentions({
+        source_date: date,
+        ...intentions,
+      });
+      const day = completeHabit(date, "evening_ritual");
       const streak = calculateStreak(date);
       const weightAverage = getWeightAverage(date);
       return NextResponse.json({ ...day, streak, weightAverage });
     }
 
-    const day = toggleHabit(date, habit_id, value);
+    if (!habit_id) {
+      return NextResponse.json({ error: "Missing habit_id" }, { status: 400 });
+    }
+
+    let day;
+    if (action === "set_weight") {
+      day = setHabitWeight(date, habit_id, value ?? null);
+    } else if (action === "set_text") {
+      day = setHabitText(date, habit_id, text ?? null);
+    } else if (action === "complete") {
+      day = completeHabit(date, habit_id);
+    } else {
+      day = toggleHabit(date, habit_id, value);
+    }
+
     const streak = calculateStreak(date);
     const weightAverage = getWeightAverage(date);
     return NextResponse.json({ ...day, streak, weightAverage });

@@ -6,20 +6,26 @@ export type HabitSection =
   | "Afternoon"
   | "Evening";
 
+export type HabitInputType = "none" | "weight" | "text" | "evening_ritual";
+
 export interface HabitDefinition {
   id: string;
   number: number;
   section: HabitSection;
-  label: string;
-  /** Returns false on days this habit doesn't apply (excluded from streak denominator) */
+  emoji: string;
+  title: string;
+  subtitle?: string;
+  /** Shown under title for dynamic habits */
+  getSubtitle?: (date: string) => string;
+  getTitle?: (date: string) => string;
   isApplicable?: (date: string) => boolean;
-  /** Dynamic label based on day of week */
-  getLabel?: (date: string) => string;
-  acceptsWeight?: boolean;
+  inputType?: HabitInputType;
+  /** Sub-items listed under evening ritual */
+  ritualSteps?: string[];
 }
 
 function dayOfWeek(date: string): number {
-  return parseLocalDate(date).getDay(); // 0 Sun … 6 Sat
+  return parseLocalDate(date).getDay();
 }
 
 export const DAILY_HABITS: HabitDefinition[] = [
@@ -27,124 +33,142 @@ export const DAILY_HABITS: HabitDefinition[] = [
     id: "wake",
     number: 1,
     section: "Morning",
-    label: "7:00 wake — same time every day",
+    emoji: "⏰",
+    title: "7am Wake-up",
+    subtitle: "Same time, every day",
   },
   {
     id: "weigh_in",
     number: 2,
     section: "Morning",
-    label: "Weigh in & log it (check 7-day average only)",
-    acceptsWeight: true,
+    emoji: "⚖️",
+    title: "Weigh in",
+    subtitle: "Log it — check 7-day average only",
+    inputType: "weight",
   },
   {
     id: "water_morning",
     number: 3,
     section: "Morning",
-    label: "Big glass of water",
+    emoji: "💧",
+    title: "Big Glass of Water",
   },
   {
     id: "outdoors",
     number: 4,
     section: "Morning",
-    label: "15 minutes outdoors — walk starts here",
+    emoji: "🚶",
+    title: "15 Minute Walk",
+    subtitle: "Outdoors — walk starts here",
   },
   {
     id: "cyclic_sighing",
     number: 5,
     section: "Morning",
-    label: "5 minutes cyclic sighing",
+    emoji: "🌬️",
+    title: "Cyclic Sighing",
+    subtitle: "5 minutes",
   },
   {
     id: "protein_breakfast",
     number: 6,
     section: "Morning",
-    label: "30g protein breakfast",
+    emoji: "🍳",
+    title: "Protein Breakfast",
+    subtitle: "30g protein",
   },
   {
     id: "espresso",
     number: 7,
     section: "Morning",
-    label: "Espresso",
+    emoji: "☕",
+    title: "Espresso",
   },
   {
     id: "focus_block",
     number: 8,
     section: "Work block",
-    label:
-      "90-min focus session — one defined outcome written down first. Phone away, no email or Slack until done",
+    emoji: "🎯",
+    title: "90 Min Focused Work",
+    subtitle:
+      "One defined outcome written down first. Phone away — no email or Slack until done",
   },
   {
     id: "outreach",
     number: 9,
     section: "Work block",
-    label: "30 minutes outreach",
+    emoji: "📣",
+    title: "30 Min Outreach / Sales",
+    subtitle: "LinkedIn & outreach block",
     isApplicable: (date) => {
       const d = dayOfWeek(date);
-      return d >= 1 && d <= 5; // Mon–Fri
-    },
-    getLabel: (date) => {
-      const d = dayOfWeek(date);
-      if (d === 5) return "30 min outreach — ContentMate channels (Fri)";
-      if (d >= 1 && d <= 4)
-        return "30 min outreach — CactusCan corporate LinkedIn (Mon–Thu)";
-      return "30 minutes outreach";
+      return d >= 1 && d <= 5;
     },
   },
   {
     id: "chore",
     number: 10,
     section: "Afternoon",
-    label: "One meaningful chore — house progress or a real job",
+    emoji: "🔨",
+    title: "Meaningful Chore",
+    subtitle: "House progress or a real job",
+    inputType: "text",
   },
   {
     id: "water_2l",
     number: 11,
     section: "Afternoon",
-    label: "Hit 2L water by dinner",
+    emoji: "💧",
+    title: "2L Water",
+    subtitle: "Hit 2 litres by dinner",
   },
   {
     id: "workout",
     number: 12,
     section: "Evening",
-    label: "Workout",
-    getLabel: (date) => {
+    emoji: "🏋️",
+    title: "Workout",
+    getTitle: (date) => {
       const d = dayOfWeek(date);
-      if (d === 1 || d === 2 || d === 4 || d === 5)
-        return "Harder workout — weights";
-      if (d === 3) return "Harder workout — run";
-      if (d === 6) return "Easy workout or rest day";
-      return "Rest day — no workout required";
+      if (d === 1 || d === 2 || d === 4 || d === 5) return "Weights Workout";
+      if (d === 3) return "Run Day";
+      if (d === 6) return "Easy Workout";
+      return "Rest Day";
+    },
+    getSubtitle: (date) => {
+      const d = dayOfWeek(date);
+      if (d === 6) return "Easy session or take the day off";
+      if (d === 0) return "Rest — no workout required";
+      return "Harder session tonight";
     },
   },
   {
-    id: "shutdown",
+    id: "evening_ritual",
     number: 13,
     section: "Evening",
-    label:
-      "Shutdown ritual — write tomorrow's list, phone plugged in for the night",
-  },
-  {
-    id: "shower",
-    number: 14,
-    section: "Evening",
-    label: "Shower",
-  },
-  {
-    id: "reading",
-    number: 15,
-    section: "Evening",
-    label: "Read non-fiction — paper only",
-  },
-  {
-    id: "bed",
-    number: 16,
-    section: "Evening",
-    label: "Bed",
+    emoji: "🌙",
+    title: "Evening Ritual",
+    subtitle: "Phone off after this — plug in & wind down",
+    inputType: "evening_ritual",
+    ritualSteps: [
+      "Write tomorrow's intentions",
+      "Read non-fiction (paper only)",
+      "Shower",
+      "Time with Sarah",
+      "Phone plugged in for the night",
+    ],
   },
 ];
 
-export function getHabitLabel(habit: HabitDefinition, date: string): string {
-  return habit.getLabel ? habit.getLabel(date) : habit.label;
+export function getHabitTitle(habit: HabitDefinition, date: string): string {
+  return habit.getTitle ? habit.getTitle(date) : habit.title;
+}
+
+export function getHabitSubtitle(
+  habit: HabitDefinition,
+  date: string
+): string | undefined {
+  return habit.getSubtitle ? habit.getSubtitle(date) : habit.subtitle;
 }
 
 export function isHabitApplicable(habit: HabitDefinition, date: string): boolean {
@@ -157,4 +181,9 @@ export function getApplicableHabits(date: string): HabitDefinition[] {
 
 export function getHabitById(id: string): HabitDefinition | undefined {
   return DAILY_HABITS.find((h) => h.id === id);
+}
+
+/** @deprecated use getHabitTitle */
+export function getHabitLabel(habit: HabitDefinition, date: string): string {
+  return getHabitTitle(habit, date);
 }
