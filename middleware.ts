@@ -3,12 +3,7 @@ import { jwtVerify } from "jose";
 
 const COOKIE_NAME = "streaks_token";
 
-const protectedPaths = [
-  "/dashboard",
-  "/api/entries",
-  "/api/streaks",
-  "/api/export",
-];
+const protectedPaths = ["/dashboard", "/api/day", "/api/weekly"];
 
 async function verifyTokenEdge(token: string): Promise<boolean> {
   const secret = process.env.JWT_SECRET;
@@ -46,5 +41,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/api/entries/:path*", "/api/streaks/:path*", "/api/export/:path*"],
+  matcher: ["/dashboard/:path*", "/api/day/:path*", "/api/weekly/:path*"],
 };

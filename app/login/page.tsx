@@ -50,38 +50,28 @@ export default function LoginPage() {
           <span className="text-accent">🔥</span> STREAKS
         </h1>
         <p className="mb-8 text-center text-sm text-secondary">
-          Daily health & lifestyle tracker
+          September challenge — daily routine tracker
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="sr-only">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email"
-              required
-              className="w-full rounded-xl border border-border bg-background px-4 py-3 text-primary placeholder:text-secondary/60 outline-none focus:border-accent"
-            />
-          </div>
-          <div>
-            <label htmlFor="password" className="sr-only">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              required
-              className="w-full rounded-xl border border-border bg-background px-4 py-3 text-primary placeholder:text-secondary/60 outline-none focus:border-accent"
-            />
-          </div>
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            required
+            className="w-full rounded-xl border border-border bg-background px-4 py-3 text-primary placeholder:text-secondary/60 outline-none focus:border-accent"
+          />
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            required
+            className="w-full rounded-xl border border-border bg-background px-4 py-3 text-primary placeholder:text-secondary/60 outline-none focus:border-accent"
+          />
 
           {error && (
             <p className="text-center text-sm text-destructive">{error}</p>

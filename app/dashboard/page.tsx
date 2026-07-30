@@ -1,5 +1,5 @@
-import DailyForm from "@/components/DailyForm";
+import HabitTracker from "@/components/HabitTracker";
 
 export default function DashboardPage() {
-  return <DailyForm />;
+  return <HabitTracker />;
 }
